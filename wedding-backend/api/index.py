@@ -23,7 +23,9 @@ app = FastAPI(
 # Allow browser requests from any origin.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+allow_origins=[
+    "https://wedding-eta.vercel.app",
+],
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
