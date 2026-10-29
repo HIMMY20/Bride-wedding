@@ -14,32 +14,20 @@ from pydantic import BaseModel, Field
 
 app = FastAPI(
     title="Bhavesh & Heena Wedding Guestbook (Bride Side)",
-    version="1.0.1",
+    version="1.0.2",
 )
 
 
-# -------------------- CORS CONFIGURATION --------------------
-
-def env_list(name, default=""):
-    return [
-        item.strip().rstrip("/")
-        for item in os.getenv(name, default).split(",")
-        if item.strip()
-    ]
-
-
-# Allow the bride-side frontend and any extra configured origins.
-allowed_origins = list(dict.fromkeys(
-    env_list("CORS_ORIGINS")
-    + ["https://wedding-eta.vercel.app"]
-))
-
+# -------------------- CORS --------------------
+# Public wedding guestbook API; no cookies are used.
+# Allow browser requests from any origin.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["*"],
+    max_age=600,
 )
 
 
@@ -49,7 +37,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 TOKEN_SECRET = os.getenv("TOKEN_SECRET", "")
 
-# Use the shared Neon database but isolate this wedding's entries.
+# Keep this ID unique to the bride-side wedding.
 WEDDING_ID = (
     os.getenv("WEDDING_ID", "heena-bride-side").strip()
     or "heena-bride-side"
@@ -94,7 +82,6 @@ def ensure_table(conn):
         )
     """)
 
-    # Preserve existing groom-side records.
     conn.execute("""
         ALTER TABLE wedding_wishes
         ADD COLUMN IF NOT EXISTS wedding_id VARCHAR(100)
