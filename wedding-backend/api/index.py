@@ -1,205 +1,285 @@
-
+import base64
 import hashlib
 import hmac
+import json
 import os
-import secrets
 import time
-from datetime import timezone
+from datetime import datetime, timezone
 
 import psycopg
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+--------------------------------------------------
+
+APP CONFIGURATION
+
+--------------------------------------------------
 
 app = FastAPI(
-    title="Bhavesh & Heena Wedding Guestbook (Bride Side)",
-    version="1.0.2",
+title="Bhavesh & Heena Wedding Guestbook (Bride Side)",
+version="1.0.3",
 )
 
+ALLOWED_ORIGINS = [
+"https://bride-wedding.vercel.app",
+"https://wedding-eta.vercel.app",
+]
 
-# -------------------- CORS --------------------
-# Public wedding guestbook API; no cookies are used.
-# Allow browser requests from any origin.
 app.add_middleware(
-    CORSMiddleware,
-allow_origins=[
-    "https://wedding-eta.vercel.app",
-],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    max_age=600,
+CORSMiddleware,
+allow_origins=ALLOWED_ORIGINS,
+allow_credentials=False,
+allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+allow_headers=["*"],
+max_age=600,
 )
-
-
-# -------------------- ENVIRONMENT VARIABLES --------------------
 
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 TOKEN_SECRET = os.getenv("TOKEN_SECRET", "")
-
-# Keep this ID unique to the bride-side wedding.
 WEDDING_ID = (
-    os.getenv("WEDDING_ID", "heena-bride-side").strip()
-    or "heena-bride-side"
+os.getenv("WEDDING_ID", "heena-bride-side").strip()
+or "heena-bride-side"
 )
 
+--------------------------------------------------
 
-# -------------------- REQUEST MODELS --------------------
+REQUEST MODELS
+
+--------------------------------------------------
 
 class WishInput(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    message: str = Field(min_length=1, max_length=1000)
-
+name: str = Field(min_length=1, max_length=80)
+message: str = Field(min_length=1, max_length=1000)
 
 class LoginInput(BaseModel):
-    password: str = Field(min_length=1, max_length=256)
+password: str = Field(min_length=1, max_length=200)
 
+--------------------------------------------------
 
-# -------------------- DATABASE --------------------
+DATABASE
+
+--------------------------------------------------
 
 def get_connection():
-    if not DATABASE_URL:
-        raise HTTPException(
-            status_code=503,
-            detail="Database is not configured. Set DATABASE_URL in Vercel.",
-        )
+if not DATABASE_URL:
+raise HTTPException(
+status_code=500,
+detail="DATABASE_URL environment variable is missing",
+)
 
+try:
     return psycopg.connect(
         DATABASE_URL,
         connect_timeout=10,
     )
+except Exception:
+    raise HTTPException(
+        status_code=500,
+        detail="Could not connect to the database",
+    )
 
+def ensure_table():
+with get_connection() as conn:
+with conn.cursor() as cur:
+cur.execute(
+"""
+CREATE TABLE IF NOT EXISTS wedding_wishes (
+id BIGSERIAL PRIMARY KEY,
+name VARCHAR(80) NOT NULL,
+message TEXT NOT NULL,
+created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
+)
 
-def ensure_table(conn):
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS wedding_wishes (
-            id BIGSERIAL PRIMARY KEY,
-            wedding_id VARCHAR(100) NOT NULL
-                DEFAULT 'bhavesh-groom-side',
-            name VARCHAR(80) NOT NULL,
-            message VARCHAR(1000) NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-    """)
-
-    conn.execute("""
-        ALTER TABLE wedding_wishes
-        ADD COLUMN IF NOT EXISTS wedding_id VARCHAR(100)
-        NOT NULL DEFAULT 'bhavesh-groom-side'
-    """)
-
-
-# -------------------- ADMIN TOKEN --------------------
-
-def sign_token(payload):
-    signature = hmac.new(
-        TOKEN_SECRET.encode(),
-        payload.encode(),
-        hashlib.sha256,
-    ).hexdigest()
-
-    return f"{payload}.{signature}"
-
-
-def validate_token(token):
-    if not token or not TOKEN_SECRET:
-        return False
-
-    try:
-        payload, signature = token.rsplit(".", 1)
-
-        expected = hmac.new(
-            TOKEN_SECRET.encode(),
-            payload.encode(),
-            hashlib.sha256,
-        ).hexdigest()
-
-        if not hmac.compare_digest(signature, expected):
-            return False
-
-        expiry = int(payload.split(":", 1)[0])
-        return expiry > int(time.time())
-
-    except (ValueError, IndexError):
-        return False
-
-
-def require_admin(authorization):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required.",
+        cur.execute(
+            """
+            ALTER TABLE wedding_wishes
+            ADD COLUMN IF NOT EXISTS wedding_id
+            VARCHAR(100) NOT NULL DEFAULT 'bhavesh-groom-side'
+            """
         )
 
-    token = authorization[7:].strip()
+    conn.commit()
 
-    if not validate_token(token):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired admin token.",
-        )
+--------------------------------------------------
 
+ADMIN TOKEN HELPERS
 
-# -------------------- HEALTH CHECKS --------------------
+--------------------------------------------------
+
+def create_admin_token():
+if not TOKEN_SECRET:
+raise HTTPException(
+status_code=500,
+detail="TOKEN_SECRET environment variable is missing",
+)
+
+payload = {
+    "exp": int(time.time()) + 60 * 60 * 12,
+    "wedding_id": WEDDING_ID,
+}
+
+payload_bytes = json.dumps(
+    payload,
+    separators=(",", ":"),
+).encode("utf-8")
+
+encoded_payload = base64.urlsafe_b64encode(
+    payload_bytes
+).decode("utf-8").rstrip("=")
+
+signature = hmac.new(
+    TOKEN_SECRET.encode("utf-8"),
+    encoded_payload.encode("utf-8"),
+    hashlib.sha256,
+).digest()
+
+encoded_signature = base64.urlsafe_b64encode(
+    signature
+).decode("utf-8").rstrip("=")
+
+return f"{encoded_payload}.{encoded_signature}"
+
+def verify_admin_token(authorization: str | None):
+if not authorization or not authorization.startswith("Bearer "):
+raise HTTPException(
+status_code=401,
+detail="Admin authentication required",
+)
+
+if not TOKEN_SECRET:
+    raise HTTPException(
+        status_code=500,
+        detail="TOKEN_SECRET environment variable is missing",
+    )
+
+token = authorization.split(" ", 1)[1].strip()
+parts = token.split(".")
+
+if len(parts) != 2:
+    raise HTTPException(
+        status_code=401,
+        detail="Invalid admin token",
+    )
+
+encoded_payload, encoded_signature = parts
+
+expected_signature = hmac.new(
+    TOKEN_SECRET.encode("utf-8"),
+    encoded_payload.encode("utf-8"),
+    hashlib.sha256,
+).digest()
+
+expected_encoded_signature = base64.urlsafe_b64encode(
+    expected_signature
+).decode("utf-8").rstrip("=")
+
+if not hmac.compare_digest(
+    encoded_signature,
+    expected_encoded_signature,
+):
+    raise HTTPException(
+        status_code=401,
+        detail="Invalid admin token",
+    )
+
+try:
+    padded_payload = encoded_payload + "=" * (
+        -len(encoded_payload) % 4
+    )
+
+    payload = json.loads(
+        base64.urlsafe_b64decode(padded_payload)
+    )
+except Exception:
+    raise HTTPException(
+        status_code=401,
+        detail="Invalid admin token",
+    )
+
+if payload.get("exp", 0) < int(time.time()):
+    raise HTTPException(
+        status_code=401,
+        detail="Admin token has expired",
+    )
+
+if payload.get("wedding_id") != WEDDING_ID:
+    raise HTTPException(
+        status_code=403,
+        detail="Token is for a different wedding",
+    )
+
+return payload
+
+--------------------------------------------------
+
+BASIC & HEALTH ENDPOINTS
+
+--------------------------------------------------
 
 @app.get("/")
 def root():
-    return {
-        "ok": True,
-        "service": "Bhavesh & Heena Wedding Guestbook (Bride Side)",
-        "docs": "/docs",
-    }
-
+return {
+"ok": True,
+"message": "Wedding guestbook API is running",
+"wedding_id": WEDDING_ID,
+}
 
 @app.get("/api/health")
 def health():
-    return {
-        "ok": True,
-        "database_configured": bool(DATABASE_URL),
-    }
-
+return {
+"ok": True,
+"service": "wedding-guestbook",
+"wedding_id": WEDDING_ID,
+}
 
 @app.get("/api/health/database")
 def database_health():
-    try:
-        with get_connection() as conn:
-            conn.execute("SELECT 1")
+try:
+with get_connection() as conn:
+with conn.cursor() as cur:
+cur.execute("SELECT 1")
+cur.fetchone()
 
-        return {
-            "ok": True,
-            "database_connected": True,
-        }
+    return {
+        "ok": True,
+        "database_connected": True,
+    }
 
-    except HTTPException:
-        raise
+except HTTPException:
+    raise
 
-    except Exception:
-        raise HTTPException(
-            status_code=503,
-            detail="Database connection failed. Check DATABASE_URL and Neon settings.",
-        )
+except Exception:
+    raise HTTPException(
+        status_code=500,
+        detail="Database health check failed",
+    )
 
+--------------------------------------------------
 
-# -------------------- PUBLIC GUEST BOOK --------------------
+PUBLIC GUESTBOOK ENDPOINTS
+
+--------------------------------------------------
 
 @app.post("/api/wishes")
-def create_wish(body: WishInput):
-    name = body.name.strip()
-    message = body.message.strip()
+def create_wish(wish: WishInput):
+name = wish.name.strip()
+message = wish.message.strip()
 
-    if not name or not message:
-        raise HTTPException(
-            status_code=422,
-            detail="Please enter your name and blessings.",
-        )
+if not name or not message:
+    raise HTTPException(
+        status_code=422,
+        detail="Name and message are required",
+    )
 
-    try:
-        with get_connection() as conn:
-            ensure_table(conn)
-
-            row = conn.execute(
+try:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
                 """
                 INSERT INTO wedding_wishes
                     (wedding_id, name, message)
@@ -207,136 +287,216 @@ def create_wish(body: WishInput):
                 RETURNING id
                 """,
                 (WEDDING_ID, name, message),
-            ).fetchone()
+            )
 
-            conn.commit()
+            row = cur.fetchone()
 
-        return {
-            "ok": True,
-            "id": row[0],
-        }
-
-    except HTTPException:
-        raise
-
-    except Exception:
-        raise HTTPException(
-            status_code=503,
-            detail="Could not save your blessings right now. Please try again.",
-        )
-
-
-# -------------------- ADMIN LOGIN --------------------
-
-@app.post("/api/admin/login")
-def admin_login(body: LoginInput):
-    if not ADMIN_PASSWORD or not TOKEN_SECRET:
-        raise HTTPException(
-            status_code=503,
-            detail="Admin login is not configured. Set ADMIN_PASSWORD and TOKEN_SECRET.",
-        )
-
-    if not hmac.compare_digest(
-        body.password.encode(),
-        ADMIN_PASSWORD.encode(),
-    ):
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect password.",
-        )
-
-    payload = (
-        f"{int(time.time()) + 43200}:"
-        f"{secrets.token_urlsafe(18)}"
-    )
+        conn.commit()
 
     return {
-        "token": sign_token(payload),
-        "expires_in": 43200,
+        "ok": True,
+        "id": row[0],
     }
 
+except HTTPException:
+    raise
 
-# -------------------- ADMIN: LIST BLESSINGS --------------------
+except Exception:
+    raise HTTPException(
+        status_code=500,
+        detail="Could not save the wedding wish",
+    )
+
+@app.get("/api/wishes")
+def get_public_wishes():
+try:
+with get_connection() as conn:
+with conn.cursor() as cur:
+cur.execute(
+"""
+SELECT id, name, message, created_at
+FROM wedding_wishes
+WHERE wedding_id = %s
+ORDER BY created_at DESC, id DESC
+LIMIT 200
+""",
+(WEDDING_ID,),
+)
+
+            rows = cur.fetchall()
+
+    wishes = []
+
+    for row in rows:
+        created_at = row[3]
+
+        if isinstance(created_at, datetime):
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(
+                    tzinfo=timezone.utc
+                )
+
+            created_at = created_at.isoformat()
+
+        wishes.append(
+            {
+                "id": row[0],
+                "name": row[1],
+                "message": row[2],
+                "created_at": created_at,
+            }
+        )
+
+    return {
+        "ok": True,
+        "wishes": wishes,
+    }
+
+except HTTPException:
+    raise
+
+except Exception:
+    raise HTTPException(
+        status_code=500,
+        detail="Could not load wedding wishes",
+    )
+
+--------------------------------------------------
+
+ADMIN LOGIN
+
+--------------------------------------------------
+
+@app.post("/api/admin/login")
+def admin_login(data: LoginInput):
+if not ADMIN_PASSWORD:
+raise HTTPException(
+status_code=500,
+detail="ADMIN_PASSWORD environment variable is missing",
+)
+
+if not hmac.compare_digest(
+    data.password,
+    ADMIN_PASSWORD,
+):
+    raise HTTPException(
+        status_code=401,
+        detail="Incorrect admin password",
+    )
+
+return {
+    "ok": True,
+    "token": create_admin_token(),
+}
+
+--------------------------------------------------
+
+ADMIN: VIEW ALL WISHES
+
+--------------------------------------------------
 
 @app.get("/api/admin/wishes")
-def list_wishes(authorization: str = Header(default="")):
-    require_admin(authorization)
+def admin_get_wishes(
+authorization: str | None = Header(default=None),
+):
+verify_admin_token(authorization)
 
-    try:
-        with get_connection() as conn:
-            ensure_table(conn)
-
-            rows = conn.execute(
+try:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
                 """
                 SELECT id, name, message, created_at
                 FROM wedding_wishes
                 WHERE wedding_id = %s
-                ORDER BY created_at DESC
-                LIMIT 1000
+                ORDER BY created_at DESC, id DESC
                 """,
                 (WEDDING_ID,),
-            ).fetchall()
+            )
 
-        return {
-            "wishes": [
-                {
-                    "id": row[0],
-                    "name": row[1],
-                    "message": row[2],
-                    "created_at": row[3]
-                    .astimezone(timezone.utc)
-                    .isoformat(),
-                }
-                for row in rows
-            ]
-        }
+            rows = cur.fetchall()
 
-    except HTTPException:
-        raise
+    wishes = []
 
-    except Exception:
-        raise HTTPException(
-            status_code=503,
-            detail="Could not load the guestbook.",
+    for row in rows:
+        created_at = row[3]
+
+        if isinstance(created_at, datetime):
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(
+                    tzinfo=timezone.utc
+                )
+
+            created_at = created_at.isoformat()
+
+        wishes.append(
+            {
+                "id": row[0],
+                "name": row[1],
+                "message": row[2],
+                "created_at": created_at,
+            }
         )
 
+    return {
+        "ok": True,
+        "wishes": wishes,
+    }
 
-# -------------------- ADMIN: DELETE BLESSING --------------------
+except HTTPException:
+    raise
+
+except Exception:
+    raise HTTPException(
+        status_code=500,
+        detail="Could not load admin wishes",
+    )
+
+--------------------------------------------------
+
+ADMIN: DELETE A WISH
+
+--------------------------------------------------
 
 @app.delete("/api/admin/wishes/{wish_id}")
-def delete_wish(
-    wish_id: int,
-    authorization: str = Header(default=""),
+def admin_delete_wish(
+wish_id: int,
+authorization: str | None = Header(default=None),
 ):
-    require_admin(authorization)
+verify_admin_token(authorization)
 
-    try:
-        with get_connection() as conn:
-            ensure_table(conn)
-
-            result = conn.execute(
+try:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
                 """
                 DELETE FROM wedding_wishes
                 WHERE id = %s AND wedding_id = %s
+                RETURNING id
                 """,
                 (wish_id, WEDDING_ID),
             )
 
-            conn.commit()
+            deleted = cur.fetchone()
 
-            if result.rowcount == 0:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Blessing not found.",
-                )
+        conn.commit()
 
-        return {"ok": True}
-
-    except HTTPException:
-        raise
-
-    except Exception:
+    if not deleted:
         raise HTTPException(
-            status_code=503,
-            detail="Could not delete this blessing.",
+            status_code=404,
+            detail="Wish not found",
         )
+
+    return {
+        "ok": True,
+        "deleted_id": deleted[0],
+    }
+
+except HTTPException:
+    raise
+
+except Exception:
+    raise HTTPException(
+        status_code=500,
+        detail="Could not delete the wedding wish",
+    )
