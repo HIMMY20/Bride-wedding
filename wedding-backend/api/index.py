@@ -23,7 +23,9 @@ app = FastAPI(
 )
 
 ALLOWED_ORIGINS = [
+    "https://weddingg-eta.vercel.app",
     "https://wedding-eta.vercel.app",
+    "https://bride-wedding.vercel.app",
 ]
 
 app.add_middleware(
