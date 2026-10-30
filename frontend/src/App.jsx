@@ -582,8 +582,7 @@ function WeddingInvite() {
           </p>
 
           <p style={{ fontSize: 14 }}>
-            With love · , Amarchand,
-            Yogesh, Bharat
+           
           </p>
         </Reveal>
       </div>
