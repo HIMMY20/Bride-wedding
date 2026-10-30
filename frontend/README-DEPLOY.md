@@ -1,13 +1,13 @@
 # Wedding frontend deployment
 
-This frontend is configured to call the deployed FastAPI backend at `https://backend-wedding-red.vercel.app` by default. You can override it with `VITE_API_BASE_URL`.
+This frontend is configured to call the deployed FastAPI backend at `https://bride-wedding.vercel.app/` by default. You can override it with `VITE_API_BASE_URL`.
 
 ## Vercel settings
 - Root Directory: `frontend` (if deploying from the monorepo).
 - Framework Preset: Vite.
 - Build Command: `npm run build`.
 - Output Directory: `dist`.
-- Environment Variable: `VITE_API_BASE_URL=https://backend-wedding-red.vercel.app` (Production and Preview as appropriate).
+- Environment Variable: `VITE_API_BASE_URL=https://bride-wedding.vercel.app/` (Production and Preview as appropriate).
 - Redeploy after adding/changing environment variables.
 
 ## Backend CORS

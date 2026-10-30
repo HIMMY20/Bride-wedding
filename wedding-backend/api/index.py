@@ -23,7 +23,6 @@ app = FastAPI(
 )
 
 ALLOWED_ORIGINS = [
-    "https://bride-wedding.vercel.app",
     "https://wedding-eta.vercel.app",
 ]
 
