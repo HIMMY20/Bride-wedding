@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from 'react'
 import {
   Daisy,
@@ -122,7 +123,7 @@ function WeddingInvite() {
     const message =
       `Dear ${name} 🌸\n\n` +
       `You are warmly invited to the wedding of ` +
-      `${GROOM} & ${BRIDE}!\n\n` +
+      `${BRIDE} & ${GROOM}!\n\n` +
       `Date: 3 December 2026\n` +
       `Venue: ${VENUE.name}, Pali, Rajasthan\n\n` +
       `Wedding invitation: ${link}`
@@ -225,12 +226,12 @@ function WeddingInvite() {
             className="sc2 bl"
             style={{ marginTop: 22 }}
           >
-            {GROOM}
+            {BRIDE}
           </div>
 
-          <div className="eb">and</div>
+          <div className="eb">Weds</div>
 
-          <div className="sc2 bl">{BRIDE}</div>
+          <div className="sc2 bl">{GROOM}</div>
 
           <p style={{ marginTop: 12 }}>
             Thursday, 3rd December 2026
@@ -271,26 +272,10 @@ function WeddingInvite() {
           </h2>
 
           <p>
-            With the blessings of their elders, Smt. Leeladevi
-            and Shri Hemrajji Rathore, along with the Rathore
-            family, cordially invite you to celebrate the
-            auspicious wedding of
+            With the blessings of their elders and families,
+            we cordially invite you to celebrate the auspicious
+            wedding of
           </p>
-
-          <div className="card">
-            <div
-              className="sc2"
-              style={{ fontSize: 50 }}
-            >
-              {GROOM}
-            </div>
-
-            <small>
-              Grandson of Smt. Dhagiyadevi Mishrilalji Chauhan
-              <br />
-              Son of Smt. Anita & Shri Yogeshji Chauhan
-            </small>
-          </div>
 
           <div className="card">
             <div
@@ -301,9 +286,22 @@ function WeddingInvite() {
             </div>
 
             <small>
-              Granddaughter of Kamladevi & Late Jaswantrajji Rathore
-              <br />
               Daughter of Smt. Leeladevi & Shri Hemrajji Rathore
+            </small>
+          </div>
+
+          <div className="eb">Weds</div>
+
+          <div className="card">
+            <div
+              className="sc2"
+              style={{ fontSize: 50 }}
+            >
+              {GROOM}
+            </div>
+
+            <small>
+              Son of Smt. Anita & Shri Yogeshji Chauhan
             </small>
           </div>
 
@@ -479,8 +477,8 @@ function WeddingInvite() {
           </p>
 
           <p>
-            Please leave your heartfelt blessings for Bhavesh
-            and Heena as they begin their beautiful journey
+            Please leave your heartfelt blessings for Heena
+            and Bhavesh as they begin their beautiful journey
             together. 🌸
           </p>
 
@@ -547,7 +545,7 @@ function WeddingInvite() {
               className="eb"
               style={{ marginTop: 18 }}
             >
-              With love · Bhavesh & Heena
+              With love · Heena & Bhavesh
             </p>
           </div>
 
@@ -584,7 +582,7 @@ function WeddingInvite() {
           </p>
 
           <p style={{ fontSize: 14 }}>
-            With love · Mishrilal, Amarchand,
+            With love · , Amarchand,
             Yogesh, Bharat
           </p>
         </Reveal>
@@ -676,7 +674,7 @@ function AdminPage() {
   return (
     <main className="admin-page">
       <div className="admin-panel">
-        <p className="eb">B H  ·  H Wedding</p>
+        <p className="eb">H  ·  B Wedding</p>
         <h1>Private Guestbook</h1>
         <p className="admin-subtitle">Blessings shared by your wedding guests</p>
         {!token ? (
@@ -719,9 +717,9 @@ function AdminPage() {
 }
 
 export default function App() {
-if (window.location.pathname.replace(/\/+$/, '') === '/admin') {
-  return <AdminPage />
-}
-  
+  if (window.location.pathname.replace(/\/+$/, '') === '/admin') {
+    return <AdminPage />
+  }
+
   return <WeddingInvite />
 }
