@@ -57,9 +57,9 @@ export const CALENDAR_URL =
 
 export const EVENTS = [
   ['Vinayak Sthapana', 'Sunday, 29 November 2026 · 10:30 AM'],
+  ['Mehendi Ceremony', 'Wednesday, 1 December 2026 · 12:00 PM'],
   ['Mayra Ceremony', 'Wednesday, 2 December 2026 · 10:00 AM'],
   ['Haldi Ceremony', 'Wednesday, 2 December 2026 · 3:00 PM'],
-  ['Mehendi Ceremony', 'Wednesday, 1 December 2026 · 7:00 PM'],
   ['Ganpati Sthapana', 'Wednesday, 2 December 2026 · 8:30 PM'],
   ['Baarat Swagat', 'Thursday, 3 December 2026 · 7:50 AM'],
   ['Shubh Vivah (Wedding)', 'Thursday, 3 December 2026 · 8:15 AM onwards'],
